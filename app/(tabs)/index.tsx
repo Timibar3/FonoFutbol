@@ -1,98 +1,255 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  Dimensions,
+  ScrollView,
+} from 'react-native';
+import { PixelJersey } from '../../components/PixelJersey';
+import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { PIXEL } from '../../src/constants/colors';
+import { PLAYER_TEAMS } from '../../src/data/teams';
+import { TournamentManager, WINS_PER_LEVEL } from '../../src/engine/TournamentManager';
+import { TeamId } from '../../src/types';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const { width } = Dimensions.get('window');
+const CARD_W = (width - 56) / 2;
 
-export default function HomeScreen() {
+export default function TeamSelectionScreen() {
+  const [selectedId, setSelectedId] = useState<TeamId | null>(null);
+  const [tournament, setTournament] = useState(TournamentManager.getState());
+
+  useEffect(() => {
+    const t = TournamentManager.getState();
+    setTournament(t);
+    if (t.selectedTeamId !== null) setSelectedId(t.selectedTeamId);
+  }, []);
+
+  const handleSelect = (id: TeamId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedId(id);
+    TournamentManager.setTeam(id);
+  };
+
+  const handlePlay = () => {
+    if (selectedId === null) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.push('/game');
+  };
+
+  const wins = tournament.winsAtLevel;
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={styles.titleMain}>⚽ FONO FÚTBOL ⚽</Text>
+        <Text style={styles.titleSub}>¡ELEGÍ TU EQUIPO!</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {/* Level + stars */}
+        <View style={styles.levelRow}>
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelText}>NIVEL {tournament.currentLevel}</Text>
+          </View>
+          <View style={styles.starsRow}>
+            {Array.from({ length: WINS_PER_LEVEL }).map((_, i) => (
+              <Text
+                key={i}
+                style={[styles.star, i < wins && styles.starFilled]}
+              >
+                {i < wins ? '★' : '☆'}
+              </Text>
+            ))}
+          </View>
+        </View>
+
+        {/* Team cards */}
+        <View style={styles.grid}>
+          {PLAYER_TEAMS.map((team) => {
+            const active = selectedId === team.id;
+            return (
+              <TouchableOpacity
+                key={team.id}
+                style={[styles.card, active && styles.cardActive]}
+                onPress={() => handleSelect(team.id as TeamId)}
+                activeOpacity={0.82}
+              >
+                {active && (
+                  <View style={styles.checkBadge}>
+                    <Text style={styles.checkText}>✓</Text>
+                  </View>
+                )}
+                <PixelJersey
+                  primaryColor={team.primaryColor}
+                  secondaryColor={team.secondaryColor}
+                  stripePattern={team.stripePattern}
+                  size={Math.floor(CARD_W * 0.62)}
+                />
+                <Text style={styles.cardName}>{team.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Play button */}
+        <TouchableOpacity
+          style={[styles.playBtn, selectedId === null && styles.playBtnOff]}
+          onPress={handlePlay}
+          disabled={selectedId === null}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.playBtnText}>
+            {selectedId !== null ? '▶  JUGAR  ◀' : 'ELEGÍ UN EQUIPO'}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: PIXEL.bgDark,
+  },
+  scroll: {
     alignItems: 'center',
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 32,
+    gap: 16,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  titleMain: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: PIXEL.gold,
+    letterSpacing: 3,
+    textShadowColor: '#CC6600',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 0,
+    textAlign: 'center',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  titleSub: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: PIXEL.white,
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
+  levelRow: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  levelBadge: {
+    backgroundColor: '#220044',
+    borderWidth: 3,
+    borderColor: PIXEL.gold,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+  },
+  levelText: {
+    color: PIXEL.gold,
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 4,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  star: {
+    fontSize: 30,
+    color: '#555555',
+  },
+  starFilled: {
+    color: PIXEL.gold,
+    textShadowColor: '#CC6600',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  card: {
+    width: CARD_W,
+    height: CARD_W,
+    backgroundColor: '#111133',
+    borderWidth: 3,
+    borderColor: '#333366',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    position: 'relative',
+  },
+  cardActive: {
+    borderColor: PIXEL.gold,
+    backgroundColor: '#221155',
+    shadowColor: PIXEL.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  checkBadge: {
     position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: PIXEL.gold,
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  checkText: {
+    color: PIXEL.black,
+    fontWeight: '900',
+    fontSize: 15,
+  },
+  jersey: {
+    width: CARD_W * 0.62,
+    height: CARD_W * 0.62,
+  },
+  cardName: {
+    color: PIXEL.white,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginTop: 4,
+    textShadowColor: PIXEL.black,
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
+  },
+  playBtn: {
+    backgroundColor: PIXEL.btnGreen,
+    borderWidth: 3,
+    borderColor: PIXEL.black,
+    borderBottomWidth: 7,
+    borderBottomColor: PIXEL.btnGreenDark,
+    paddingVertical: 18,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  playBtnOff: {
+    backgroundColor: PIXEL.btnGray,
+    borderBottomColor: PIXEL.btnGrayDark,
+  },
+  playBtnText: {
+    color: PIXEL.white,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 4,
+    textShadowColor: PIXEL.black,
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 0,
   },
 });
